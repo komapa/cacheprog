@@ -26,6 +26,9 @@ type CacheprogAppArgs struct {
 	MaxConcurrentRemotePuts int           `arg:"--max-concurrent-remote-puts,env:MAX_CONCURRENT_REMOTE_PUTS" placeholder:"NUM" help:"Max number of concurrent remote puts, unlimited if not provided"`
 	MaxBackgroundWait       time.Duration `arg:"--max-background-wait,env:MAX_BACKGROUND_WAIT" placeholder:"DURATION" default:"10s" help:"Max time to wait for waiting of background operations to complete"`
 	MinRemotePutSize        int64         `arg:"--min-remote-put-size,env:MIN_REMOTE_PUT_SIZE" placeholder:"SIZE" help:"Min size of object to push to remote storage, no size limit if not provided"`
+	BundleTargetSize        int64         `arg:"--bundle-target-size,env:BUNDLE_TARGET_SIZE" placeholder:"SIZE" help:"Soft size in bytes that triggers flushing a remote write bundle. 0 disables bundling (default)."`
+	BundleMaxEntries        int           `arg:"--bundle-max-entries,env:BUNDLE_MAX_ENTRIES" placeholder:"NUM" help:"Flush a remote write bundle once this many entries are buffered. 0 means no entry limit."`
+	BundleIdleFlush         time.Duration `arg:"--bundle-idle-flush,env:BUNDLE_IDLE_FLUSH" placeholder:"DURATION" help:"Flush a non-empty write bundle after this idle period. 0 disables idle flush."`
 	DisableGet              bool          `arg:"--disable-get,env:DISABLE_GET" help:"Disable getting objects from any storage, useful to force rebuild of the project and rewrite cache"`
 	DisablePut              bool          `arg:"--disable-put,env:DISABLE_PUT" help:"Disable writing to remote storage"`
 }
@@ -122,15 +125,32 @@ func (a *CacheprogAppArgs) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to configure disk storage: %w", err)
 	}
 
+	localStorage := cacheprog.ObservingLocalStorage{LocalStorage: diskStorage}
+	codec := compression.NewCodec()
+
+	if remoteStorage != nil && a.BundleTargetSize > 0 {
+		slog.Info("Enabling remote write bundling",
+			"target_size", a.BundleTargetSize,
+			"max_entries", a.BundleMaxEntries,
+			"idle_flush", a.BundleIdleFlush,
+		)
+		remoteStorage = cacheprog.NewBundlingRemoteStorage(remoteStorage, localStorage, codec, cacheprog.BundlingOptions{
+			TargetSize: a.BundleTargetSize,
+			MaxEntries: a.BundleMaxEntries,
+			IdleFlush:  a.BundleIdleFlush,
+		})
+	}
+
 	h := cacheprog.NewHandler(cacheprog.HandlerOptions{
 		RemoteStorage:           remoteStorage,
 		RemoteGetTimeout:        a.RemoteGetTimeout,
 		RemotePutTimeout:        a.RemotePutTimeout,
 		MaxConcurrentRemoteGets: a.MaxConcurrentRemoteGets,
 		MaxConcurrentRemotePuts: a.MaxConcurrentRemotePuts,
-		LocalStorage:            cacheprog.ObservingLocalStorage{LocalStorage: diskStorage},
+		MinRemotePutSize:        a.MinRemotePutSize,
+		LocalStorage:            localStorage,
 		CloseTimeout:            a.MaxBackgroundWait,
-		CompressionCodec:        compression.NewCodec(),
+		CompressionCodec:        codec,
 		DisableGet:              a.DisableGet,
 		DisablePut:              a.DisablePut,
 	})

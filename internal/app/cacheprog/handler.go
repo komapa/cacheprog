@@ -434,10 +434,18 @@ func (h *Handler) handleClose(ctx context.Context, writer cacheproto.ResponseWri
 	slog.DebugContext(ctx, "Close handler called")
 
 	close(h.closeChan)
-	if h.onClose != nil {
-		h.closeWG.Go(func() { h.handleOnClose(ctx) })
-	}
+	// Wait for in-flight puts to finish enqueueing before flushing remote buffers.
 	h.closeWait()
+
+	if f, ok := h.remoteStorage.(Flusher); ok {
+		if err := f.Flush(ctx); err != nil {
+			slog.ErrorContext(ctx, "Remote storage flush failed", logging.Error(err))
+		}
+	}
+
+	if h.onClose != nil {
+		h.handleOnClose(ctx)
+	}
 
 	slog.DebugContext(ctx, "Close handler finished")
 	h.writeResponse(ctx, writer, &cacheproto.Response{

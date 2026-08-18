@@ -88,6 +88,16 @@ Remote storage timeout can be configured via `CACHEPROG_REMOTE_GET_TIMEOUT` and 
 
 To disable it set this variable to zero or negative value.
 
+### Remote write bundling
+
+Go's cacheprog protocol is very chatty (many tiny objects). To reduce remote round trips you can enable write bundling, similar to Depot Gocache v2:
+
+* `CACHEPROG_BUNDLE_TARGET_SIZE` - Soft size in bytes that triggers flushing a bundle to remote storage. `0` disables bundling (default).
+* `CACHEPROG_BUNDLE_MAX_ENTRIES` - Flush once this many entries are buffered. `0` means no entry-count limit.
+* `CACHEPROG_BUNDLE_IDLE_FLUSH` - Flush a non-empty buffer after this idle duration. `0` disables idle flush.
+
+When enabled, PUTs are appended into an in-memory buffer and uploaded as one bundle object plus small per-ActionID pointers. A GET that hits a pointer downloads the whole bundle and prefetches sibling segments into local disk. Legacy single-object remote entries continue to work.
+
 ### S3-compatible storage configuration
 
 Environment variables for S3-compatible storage are:

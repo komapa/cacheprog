@@ -13,6 +13,8 @@ The guideline for versioning is as follows:
 
 ## [Unreleased]
 
+- Add optional remote write bundling (`CACHEPROG_BUNDLE_TARGET_SIZE` / max entries / idle flush): pack adjacent PUTs into a single remote object and prefetch sibling segments on GET
+
 ## [1.3.0] - 2026-07-23
 - Add configurable timeouts for get and put operations to remote storage
 - Upgrade dependencies
