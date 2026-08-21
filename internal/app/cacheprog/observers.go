@@ -116,3 +116,10 @@ func (o ObservingRemoteStorage) Put(ctx context.Context, request *PutRequest) (*
 	metrics.ObserveObject("remote", "put", request.Size)
 	return &PutResponse{}, nil
 }
+
+func (o ObservingRemoteStorage) Flush(ctx context.Context) error {
+	if f, ok := o.RemoteStorage.(Flusher); ok {
+		return f.Flush(ctx)
+	}
+	return nil
+}

@@ -101,3 +101,10 @@ func (b *RemoteStorageCircuitBreaker) Put(ctx context.Context, request *PutReque
 
 	return nil, err
 }
+
+func (b *RemoteStorageCircuitBreaker) Flush(ctx context.Context) error {
+	if f, ok := b.upstream.(Flusher); ok {
+		return f.Flush(ctx)
+	}
+	return nil
+}
